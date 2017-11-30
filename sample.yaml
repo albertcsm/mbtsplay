@@ -1,0 +1,10 @@
+high-profile-1.6m:
+  src: passthrough/LIFETIVAL_XDCAM_English_1.6M_1280x720.ts
+  dst:
+    - 127.0.0.1:10002
+    - 127.0.0.1:10012
+low-profile-800k:
+  src: passthrough/LIFETIVAL_XDCAM_English_800k_854x480.ts
+  dst:
+    - 127.0.0.1:10003
+    - 127.0.0.1:10013

@@ -1,0 +1,35 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import signal
+import subprocess
+import yaml
+
+def cleanup(signum, frame):
+    for pid in procs:
+        print("Cleaning up process %s" % pid)
+        procs[pid].kill()
+
+parser = argparse.ArgumentParser(description='Play multiple streams.')
+parser.add_argument('file', help='yaml config')
+parser.add_argument('--tsplay', help='ts play location', default='tsplay')
+args = parser.parse_args()
+
+with open(args.file, 'r') as stream:
+    config = yaml.load(stream)
+
+procs = {}
+for profile in config:
+    for dst in config[profile]['dst']:
+        cmd = [ args.tsplay, config[profile]['src'], dst, '-loop' ]
+        p = subprocess.Popen(cmd)
+        procs[p.pid] = p
+
+signal.signal(signal.SIGINT, cleanup)
+
+while procs:
+    pid, status = os.wait()
+    if pid in procs:
+        del procs[pid]
+        print "Process %status exited, %d remaining..." % (pid, len(procs))
