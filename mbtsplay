@@ -4,12 +4,54 @@ import argparse
 import os
 import signal
 import subprocess
+import sys
 import yaml
+from threading import Thread
 
-def cleanup(signum, frame):
+FNULL = open(os.devnull, 'w')
+procs = {}
+muted = False
+
+
+def cleanup(signum=None, frame=None):
     for pid in procs:
         print("Cleaning up process %s" % pid)
         procs[pid].kill()
+    if muted:
+        print("Cleaning up iptables rules")
+        update_firewall(False)
+    sys.exit()
+
+
+def supervise_child_processes():
+    for profile in config:
+        for dst in config[profile]['dst']:
+            cmd = [ args.tsplay, config[profile]['src'], dst, '-loop' ]
+            p = subprocess.Popen(cmd, stdout=FNULL, stderr=FNULL)
+            procs[p.pid] = p
+    while procs:
+        pid, status = os.wait()
+        if pid in procs:
+            del procs[pid]
+            print "Process %s exited, %d remaining..." % (pid, len(procs))
+
+
+def update_firewall(muted):
+    if muted:
+        flag = '-A'
+    else:
+        flag = '-D'
+    for profile in config:
+        for dst in config[profile]['dst']:
+            cmd = [ 'sudo', 'iptables', flag, 'OUTPUT', '-p', 'udp', '--dport', parse_dst_port(dst), '-j', 'DROP' ]
+            p = subprocess.Popen(cmd)
+            p.wait()
+
+
+def parse_dst_port(host_port_pair):
+    parts = host_port_pair.split(':', 1)
+    return parts[-1]
+
 
 parser = argparse.ArgumentParser(description='Play multiple streams.')
 parser.add_argument('file', help='yaml config')
@@ -19,17 +61,22 @@ args = parser.parse_args()
 with open(args.file, 'r') as stream:
     config = yaml.load(stream)
 
-procs = {}
-for profile in config:
-    for dst in config[profile]['dst']:
-        cmd = [ args.tsplay, config[profile]['src'], dst, '-loop' ]
-        p = subprocess.Popen(cmd)
-        procs[p.pid] = p
-
 signal.signal(signal.SIGINT, cleanup)
 
-while procs:
-    pid, status = os.wait()
-    if pid in procs:
-        del procs[pid]
-        print "Process %status exited, %d remaining..." % (pid, len(procs))
+supervisor_thread = Thread(target=supervise_child_processes)
+supervisor_thread.start()
+
+while True:
+    if not muted:
+        prompt = 'mute / quit > '
+    else:
+        prompt = 'unmute / quit > '
+    cmd = raw_input(prompt)
+    if cmd == 'mute' and not muted:
+        muted = True
+        update_firewall(muted=True)
+    elif cmd == 'unmute' and muted:
+        update_firewall(muted=False)
+        muted = False
+    elif cmd == 'quit':
+        cleanup()
