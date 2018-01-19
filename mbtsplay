@@ -27,6 +27,8 @@ def supervise_child_processes():
     for profile in config:
         for dst in config[profile]['dst']:
             cmd = [ args.tsplay, config[profile]['src'], dst, '-loop' ]
+            if args.iface:
+                cmd.extend([ '-mcastif', args.iface ])
             p = subprocess.Popen(cmd, stdout=FNULL, stderr=FNULL)
             procs[p.pid] = p
     while procs:
@@ -56,6 +58,7 @@ def parse_dst_port(host_port_pair):
 parser = argparse.ArgumentParser(description='Play multiple streams.')
 parser.add_argument('file', help='yaml config')
 parser.add_argument('--tsplay', help='ts play location', default='tsplay')
+parser.add_argument('--iface', help='network interface address')
 args = parser.parse_args()
 
 with open(args.file, 'r') as stream:
